@@ -42,9 +42,12 @@ app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "OK", service: "MPTM Amravati Backend API", timestamp: new Date().toISOString() });
 });
 
-// Seed/Update default admin with bcrypt hashed password Mptmamt@2026 in database
+// Seed/Update default admin lazily
+let adminSeeded = false;
 const seedDefaultAdmin = async () => {
+    if (adminSeeded) return;
     try {
+        adminSeeded = true;
         const rawPassword = "Mptmamt@2026";
         const hashedPassword = await bcrypt.hash(rawPassword, 10);
         const targetUsername = "mptmamravati.org";
@@ -62,18 +65,25 @@ const seedDefaultAdmin = async () => {
             });
             console.log("✅ Admin created with hashed password Mptmamt@2026 in database");
         } else {
-            // Update existing admin password to hashed version of Mptmamt@2026
             await prisma.admin.update({
                 where: { username: targetUsername },
                 data: { password: hashedPassword },
             });
-            console.log("🔒 Admin password updated to bcrypt hash of Mptmamt@2026 in database");
+            console.log("🔒 Admin password updated to bcrypt hash in database");
         }
     } catch (err) {
+        adminSeeded = false;
         console.error("Admin seed error:", err);
     }
 };
-seedDefaultAdmin();
+
+// Middleware to ensure admin seed on requests without blocking initialization
+app.use(async (_req, _res, next) => {
+    if (!adminSeeded) {
+        seedDefaultAdmin().catch(console.error);
+    }
+    next();
+});
 
 // POST /api/admin/login - Authenticate admin against bcrypt hashed password in Neon PostgreSQL database
 app.post("/api/admin/login", async (req: Request, res: Response) => {
