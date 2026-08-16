@@ -284,6 +284,65 @@ app.post("/api/register", async (req: Request, res: Response) => {
     }
 });
 
+// DELETE /api/register/:id - Delete registration entry by ID
+app.delete("/api/register/:id", async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.id);
+
+        if (!id) {
+            res.status(400).json({
+                success: false,
+                error: "नोंदणी आयडी (Registration ID) आवश्यक आहे",
+            });
+            return;
+        }
+
+        // Delete MemberRegistration record (Prisma will cascade delete mainMembers & familyMembers)
+        const deletedRegistration = await prisma.memberRegistration.delete({
+            where: { id },
+        });
+
+        res.json({
+            success: true,
+            message: "नोंदणी अर्ज यशस्वीरित्या हटवला गेला",
+            data: deletedRegistration,
+        });
+    } catch (error: any) {
+        console.error("Delete Registration Error:", error);
+        if (error.code === "P2025") {
+            res.status(404).json({
+                success: false,
+                error: "हा नोंदणी अर्ज सापडला नाही किंवा आधीच हटवला आहे!",
+            });
+            return;
+        }
+        res.status(500).json({
+            success: false,
+            error: "डेटाबेस सर्व्हर त्रुटी: " + (error.message || "हटवताना अनपेक्षित त्रुटी झाली"),
+        });
+    }
+});
+
+app.delete("/api/registrations/:id", async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.id);
+        const deletedRegistration = await prisma.memberRegistration.delete({
+            where: { id },
+        });
+        res.json({
+            success: true,
+            message: "नोंदणी अर्ज यशस्वीरित्या हटवला गेला",
+            data: deletedRegistration,
+        });
+    } catch (error: any) {
+        console.error("Delete Registration Error:", error);
+        res.status(500).json({
+            success: false,
+            error: error.message || "हटवताना अनपेक्षित त्रुटी झाली",
+        });
+    }
+});
+
 if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
     app.listen(PORT, () => {
         console.log(`🚀 Backend Express Server running on http://localhost:${PORT}`);
