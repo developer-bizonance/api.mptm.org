@@ -224,6 +224,31 @@ app.post("/api/register", async (req: Request, res: Response) => {
             return;
         }
 
+        // Duplicate Validation Check for Main Member Mobile Number or Full Name
+        for (const m of mainMembers) {
+            if (m.mobileNo && m.mobileNo.trim().length === 10) {
+                const existingMember = await prisma.mainMember.findFirst({
+                    where: {
+                        OR: [
+                            { mobileNo: m.mobileNo.trim() },
+                            { fullName: m.fullName.trim() }
+                        ]
+                    },
+                    include: {
+                        registration: true
+                    }
+                });
+
+                if (existingMember) {
+                    res.status(400).json({
+                        success: false,
+                        error: `हा मोबाईल क्रमांक (${m.mobileNo}) किंवा नाव (${m.fullName}) आधीच नोंदणीकृत आहे! (पावती क्र: ${existingMember.registration?.receiptNo || 'अस्तित्वात आहे'}). हा डेटा आधीच अस्तित्वात आहे!`,
+                    });
+                    return;
+                }
+            }
+        }
+
         const feeNumber = parseInt(formData.registrationFee, 10) || 101;
 
         const registration = await prisma.memberRegistration.create({
@@ -265,7 +290,7 @@ app.post("/api/register", async (req: Request, res: Response) => {
 
         res.json({
             success: true,
-            message: "सदस्य नोंदणी डेटाबेसमध्ये (Neon PostgreSQL) यशस्वीरित्या जतन झाली!",
+            message: "सदस्य नोंदणी यशस्वीरित्या जतन झाली!",
             data: registration,
         });
     } catch (error: any) {
