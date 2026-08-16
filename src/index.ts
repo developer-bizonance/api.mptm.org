@@ -12,16 +12,128 @@ const PORT = process.env.PORT || 5000;
 // Enable CORS for frontend
 app.use(
     cors({
-        origin: (origin, callback) => {
-            if (!origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
-                callback(null, true);
-            } else {
-                callback(null, true);
-            }
-        },
-        credentials: true,
+        origin: "*",
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     })
 );
+
+app.options("*", cors());
+
+// Helper function to delete registration entry cleanly with manual cascade fallback
+const deleteRegistrationByIdOrReceipt = async (identifier: string) => {
+    // 1. Find target registration by ID or receiptNo
+    const target = await prisma.memberRegistration.findFirst({
+        where: {
+            OR: [
+                { id: identifier },
+                { receiptNo: identifier }
+            ]
+        }
+    });
+
+    if (!target) {
+        return null;
+    }
+
+    const regId = target.id;
+
+    // Use transaction to delete family members, main members, and registration
+    const [deletedFamily, deletedMain, deletedReg] = await prisma.$transaction([
+        prisma.familyMember.deleteMany({ where: { registrationId: regId } }),
+        prisma.mainMember.deleteMany({ where: { registrationId: regId } }),
+        prisma.memberRegistration.delete({ where: { id: regId } })
+    ]);
+
+    return {
+        registration: deletedReg,
+        mainCount: deletedMain.count,
+        familyCount: deletedFamily.count
+    };
+};
+
+// DELETE /api/register/:id - Delete registration entry by ID
+app.delete("/api/register/:id", async (req: Request, res: Response) => {
+    try {
+        const identifier = String(req.params.id);
+        const result = await deleteRegistrationByIdOrReceipt(identifier);
+
+        if (!result) {
+            res.status(404).json({
+                success: false,
+                error: "हा नोंदणी अर्ज सापडला नाही किंवा आधीच हटवला आहे!",
+            });
+            return;
+        }
+
+        res.json({
+            success: true,
+            message: "नोंदणी अर्ज यशस्वीरित्या डेटाबेसमधून हटवला गेला",
+            data: result.registration,
+        });
+    } catch (error: any) {
+        console.error("Delete Registration Error:", error);
+        res.status(500).json({
+            success: false,
+            error: "डेटाबेस सर्व्हर त्रुटी: " + (error.message || "हटवताना अनपेक्षित त्रुटी झाली"),
+        });
+    }
+});
+
+// POST /api/register/delete/:id - Fallback route for POST method deletion
+app.post("/api/register/delete/:id", async (req: Request, res: Response) => {
+    try {
+        const identifier = String(req.params.id);
+        const result = await deleteRegistrationByIdOrReceipt(identifier);
+
+        if (!result) {
+            res.status(404).json({
+                success: false,
+                error: "हा नोंदणी अर्ज सापडला नाही किंवा आधीच हटवला आहे!",
+            });
+            return;
+        }
+
+        res.json({
+            success: true,
+            message: "नोंदणी अर्ज यशस्वीरित्या डेटाबेसमधून हटवला गेला",
+            data: result.registration,
+        });
+    } catch (error: any) {
+        console.error("Delete Registration Error:", error);
+        res.status(500).json({
+            success: false,
+            error: "डेटाबेस सर्व्हर त्रुटी: " + (error.message || "हटवताना अनपेक्षित त्रुटी झाली"),
+        });
+    }
+});
+
+app.delete("/api/registrations/:id", async (req: Request, res: Response) => {
+    try {
+        const identifier = String(req.params.id);
+        const result = await deleteRegistrationByIdOrReceipt(identifier);
+
+        if (!result) {
+            res.status(404).json({
+                success: false,
+                error: "हा नोंदणी अर्ज सापडला नाही किंवा आधीच हटवला आहे!",
+            });
+            return;
+        }
+
+        res.json({
+            success: true,
+            message: "नोंदणी अर्ज यशस्वीरित्या डेटाबेसमधून हटवला गेला",
+            data: result.registration,
+        });
+    } catch (error: any) {
+        console.error("Delete Registration Error:", error);
+        res.status(500).json({
+            success: false,
+            error: "डेटाबेस सर्व्हर त्रुटी: " + (error.message || "हटवताना अनपेक्षित त्रुटी झाली"),
+        });
+    }
+});
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
